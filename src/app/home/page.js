@@ -114,7 +114,7 @@ function DAWLoggerHomepage() {
   ]
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900">
+    <div className="min-h-screen bg-linear-to-b from-gray-900 via-gray-800 to-gray-900">
 
 
       {/* Hero Section */}
@@ -248,7 +248,7 @@ function DAWLoggerHomepage() {
       </section>
 
       {/* CTA Section */}
-      <section className="py-20 px-4 sm:px-6 lg:px-8 bg-gradient-to-r from-[#ef8e32] to-[#d67a28]">
+      <section className="py-20 px-4 sm:px-6 lg:px-8 bg-linear-to-r from-[#ef8e32] to-[#d67a28]">
         <div className="max-w-4xl mx-auto text-center">
           <h2 className="text-4xl sm:text-5xl font-bold text-white mb-6">
             Ready to Transform Your Workflow?
