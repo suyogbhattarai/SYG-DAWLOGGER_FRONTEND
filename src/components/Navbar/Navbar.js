@@ -1,9 +1,9 @@
 'use client'
-import React, { useState } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { useAppDispatch, useAppSelector } from '@/utils/lib/redux/store'
-import { loginUser, registerUser } from '@/utils/lib/redux/features/auth/authSlice'
+import { loginUser, registerUser, logoutUser } from '@/utils/lib/redux/features/auth/authSlice'
 import {
   AiOutlineClose,
   AiOutlineMenu,
@@ -11,7 +11,10 @@ import {
   AiOutlineUserAdd,
   AiOutlineEye,
   AiOutlineEyeInvisible,
+  AiOutlineUser,
+  AiOutlineLogout,
 } from 'react-icons/ai'
+import { FiChevronDown } from 'react-icons/fi'
 import logo from './logo.png'
 import Loader, { LoaderButton } from '../ui/Loader'
 import Toast from '../ui/Toast'
@@ -19,13 +22,16 @@ import Toast from '../ui/Toast'
 export default function Navbar() {
   const router = useRouter()
   const dispatch = useAppDispatch()
-  const { loading, isAuthenticated } = useAppSelector((state) => state.auth)
+  const { loading, user } = useAppSelector((state) => state.auth)
 
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [showLoginModal, setShowLoginModal] = useState(false)
   const [showSignupModal, setShowSignupModal] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+  const [showProfileDropdown, setShowProfileDropdown] = useState(false)
+
+  const dropdownRef = useRef(null)
 
   const [loginForm, setLoginForm] = useState({ username: '', password: '' })
   const [signupForm, setSignupForm] = useState({
@@ -38,6 +44,20 @@ export default function Navbar() {
   })
 
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' })
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setShowProfileDropdown(false)
+      }
+    }
+
+    if (showProfileDropdown) {
+      document.addEventListener('mousedown', handleClickOutside)
+      return () => document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [showProfileDropdown])
 
   const toggleMenu = () => setIsMenuOpen(!isMenuOpen)
   const openLogin = () => {
@@ -99,6 +119,14 @@ export default function Navbar() {
     }
   }
 
+  // Handle Logout
+  const handleLogout = async () => {
+    await dispatch(logoutUser())
+    setShowProfileDropdown(false)
+    setToast({ show: true, message: 'Logged out successfully!', type: 'success' })
+    router.push('/')
+  }
+
   return (
     <>
       {/* Loader */}
@@ -118,7 +146,7 @@ export default function Navbar() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16 sm:h-20">
             {/* Logo */}
-            <div className="flex items-center">
+            <div className="flex items-center cursor-pointer" onClick={() => router.push('/')}>
               <Image src={logo} alt="DAW Logger Logo" className="h-10 sm:h-12 w-auto" />
             </div>
 
@@ -130,16 +158,60 @@ export default function Navbar() {
               <a href="#about" className="text-gray-300 hover:text-white font-medium">About</a>
             </div>
 
-            {/* Desktop Auth Buttons */}
+            {/* Desktop Auth Buttons or Profile */}
             <div className="hidden md:flex items-center space-x-4">
-              <button onClick={openLogin} className="flex items-center space-x-2 px-4 py-2 text-white border border-primary hover:bg-[#EF8E34]/10 rounded-lg font-medium">
-                <AiOutlineLogin size={18} />
-                <span>Login</span>
-              </button>
-              <button onClick={openSignup} className="flex items-center space-x-2 px-4 py-2 bg-[#EF8E34] text-white rounded-lg font-medium shadow-lg">
-                <AiOutlineUserAdd size={18} />
-                <span>Sign Up</span>
-              </button>
+              {user ? (
+                <div className="relative" ref={dropdownRef}>
+                  <button
+                    onClick={() => setShowProfileDropdown(!showProfileDropdown)}
+                    className="flex items-center space-x-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg font-medium transition-colors"
+                  >
+                    <div className="w-8 h-8 bg-[#EF8E34] rounded-full flex items-center justify-center">
+                      <AiOutlineUser size={18} />
+                    </div>
+                    <span>{user.username}</span>
+                    <FiChevronDown size={16} />
+                  </button>
+
+                  {/* Dropdown Menu */}
+                  {showProfileDropdown && (
+                    <div className="absolute right-0 mt-2 w-56 bg-gray-800 border border-gray-700 rounded-lg shadow-xl py-2">
+                      <div className="px-4 py-3 border-b border-gray-700">
+                        <p className="text-white font-semibold">Hi, {user.username}!</p>
+                        <p className="text-gray-400 text-sm truncate">{user.email}</p>
+                      </div>
+                      <button
+                        onClick={() => {
+                          router.push('/dashboard')
+                          setShowProfileDropdown(false)
+                        }}
+                        className="w-full text-left px-4 py-2 text-gray-300 hover:bg-gray-700 hover:text-white flex items-center space-x-2"
+                      >
+                        <AiOutlineUser size={18} />
+                        <span>View Dashboard</span>
+                      </button>
+                      <button
+                        onClick={handleLogout}
+                        className="w-full text-left px-4 py-2 text-red-400 hover:bg-gray-700 hover:text-red-300 flex items-center space-x-2"
+                      >
+                        <AiOutlineLogout size={18} />
+                        <span>Logout</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <>
+                  <button onClick={openLogin} className="flex items-center space-x-2 px-4 py-2 text-white border border-primary hover:bg-[#EF8E34]/10 rounded-lg font-medium">
+                    <AiOutlineLogin size={18} />
+                    <span>Login</span>
+                  </button>
+                  <button onClick={openSignup} className="flex items-center space-x-2 px-4 py-2 bg-[#EF8E34] text-white rounded-lg font-medium shadow-lg">
+                    <AiOutlineUserAdd size={18} />
+                    <span>Sign Up</span>
+                  </button>
+                </>
+              )}
             </div>
 
             {/* Mobile Menu Button */}
@@ -156,15 +228,44 @@ export default function Navbar() {
                 <a href="#pricing" className="text-gray-300 hover:text-white px-2 py-2">Pricing</a>
                 <a href="#docs" className="text-gray-300 hover:text-white px-2 py-2">Documentation</a>
                 <a href="#about" className="text-gray-300 hover:text-white px-2 py-2">About</a>
+                
                 <div className="flex flex-col space-y-2 pt-4 border-t border-gray-700">
-                  <button onClick={openLogin} className="flex items-center justify-center px-4 py-2 text-white border border-primary rounded-lg">
-                    <AiOutlineLogin size={18} />
-                    <span>Login</span>
-                  </button>
-                  <button onClick={openSignup} className="flex items-center justify-center px-4 py-2 bg-[#EF8E34] text-white rounded-lg">
-                    <AiOutlineUserAdd size={18} />
-                    <span>Sign Up</span>
-                  </button>
+                  {user ? (
+                    <>
+                      <div className="px-2 py-2 text-white">
+                        <p className="font-semibold">Hi, {user.username}!</p>
+                        <p className="text-gray-400 text-sm">{user.email}</p>
+                      </div>
+                      <button
+                        onClick={() => {
+                          router.push('/dashboard')
+                          setIsMenuOpen(false)
+                        }}
+                        className="flex items-center justify-center space-x-2 px-4 py-2 text-white border border-primary rounded-lg"
+                      >
+                        <AiOutlineUser size={18} />
+                        <span>View Dashboard</span>
+                      </button>
+                      <button
+                        onClick={handleLogout}
+                        className="flex items-center justify-center space-x-2 px-4 py-2 bg-red-600 text-white rounded-lg"
+                      >
+                        <AiOutlineLogout size={18} />
+                        <span>Logout</span>
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button onClick={openLogin} className="flex items-center justify-center space-x-2 px-4 py-2 text-white border border-primary rounded-lg">
+                        <AiOutlineLogin size={18} />
+                        <span>Login</span>
+                      </button>
+                      <button onClick={openSignup} className="flex items-center justify-center space-x-2 px-4 py-2 bg-[#EF8E34] text-white rounded-lg">
+                        <AiOutlineUserAdd size={18} />
+                        <span>Sign Up</span>
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
