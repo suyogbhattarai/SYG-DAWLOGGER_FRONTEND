@@ -3,16 +3,11 @@ import React, { useState, useRef, useEffect } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { useAppDispatch, useAppSelector } from '@/utils/lib/redux/store'
-import { loginUser, registerUser, logoutUser } from '@/utils/lib/redux/features/auth/authSlice'
+import { loginUser, registerUser, logoutUser, clearError } from '@/utils/lib/redux/features/auth/authSlice'
 import {
   AiOutlineClose,
   AiOutlineMenu,
-  AiOutlineLogin,
-  AiOutlineUserAdd,
-  AiOutlineEye,
-  AiOutlineEyeInvisible,
   AiOutlineUser,
-  AiOutlineLogout,
 } from 'react-icons/ai'
 import { FiChevronDown } from 'react-icons/fi'
 import logo from './logo.png'
@@ -22,14 +17,14 @@ import Toast from '../ui/Toast'
 export default function Navbar() {
   const router = useRouter()
   const dispatch = useAppDispatch()
-  const { loading, user } = useAppSelector((state) => state.auth)
 
-  const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [showLoginModal, setShowLoginModal] = useState(false)
   const [showSignupModal, setShowSignupModal] = useState(false)
+  const [showProfileDropdown, setShowProfileDropdown] = useState(false)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
-  const [showProfileDropdown, setShowProfileDropdown] = useState(false)
 
   const dropdownRef = useRef(null)
 
@@ -39,100 +34,117 @@ export default function Navbar() {
     email: '',
     password: '',
     confirmPassword: '',
-    firstName: '',
-    lastName: '',
   })
+
+  const { loading, user, error, fieldErrors, tokens } = useAppSelector((state) => state.auth)
 
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' })
 
-  // Close dropdown when clicking outside
   useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+    console.log('Navbar mounted — current auth user:', user)
+  }, [user])
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      // defensive: make sure ref exists
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
         setShowProfileDropdown(false)
       }
     }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
-    if (showProfileDropdown) {
-      document.addEventListener('mousedown', handleClickOutside)
-      return () => document.removeEventListener('mousedown', handleClickOutside)
-    }
-  }, [showProfileDropdown])
+  const extractErrorMessage = (error) => {
+    if (!error) return 'Unknown error occurred';
+    if (typeof error === 'string') return error;
+    const data = error.response?.data;
+    if (data?.errors) return Object.values(data.errors).flat().join(', ')
+    return data?.message || error.message || 'Server error'
+  }
 
-  const toggleMenu = () => setIsMenuOpen(!isMenuOpen)
-  const openLogin = () => {
-    setShowLoginModal(true)
-    setShowSignupModal(false)
-    setIsMenuOpen(false)
-  }
-  const openSignup = () => {
-    setShowSignupModal(true)
-    setShowLoginModal(false)
-    setIsMenuOpen(false)
-  }
   const closeModals = () => {
     setShowLoginModal(false)
     setShowSignupModal(false)
     setShowPassword(false)
     setShowConfirmPassword(false)
+    dispatch(clearError())
   }
 
-  // Helper to extract message string from error object
-  const getErrorMessage = (payload) => {
-    if (!payload) return 'Something went wrong!'
-    if (typeof payload === 'string') return payload
-    if (payload.message) return payload.message
-    if (payload.errors) {
-      if (Array.isArray(payload.errors)) return payload.errors[0]
-      if (typeof payload.errors === 'object') return Object.values(payload.errors)[0]
-    }
-    return JSON.stringify(payload)
-  }
-
-  // Handle Login
+  // LOGIN
   const handleLogin = async (e) => {
     e.preventDefault()
-    const result = await dispatch(loginUser(loginForm))
-    if (loginUser.fulfilled.match(result)) {
-      setToast({ show: true, message: 'Logged in successfully!', type: 'success' })
+    try {
+      console.log('Attempting login with', loginForm)
+      await dispatch(loginUser(loginForm)).unwrap()
+      console.log('Login succeeded — redirecting to /dashboard')
+      setToast({ show: true, message: 'Login successful 🎉', type: 'success' })
       closeModals()
       router.push('/dashboard')
-    } else {
-      setToast({ show: true, message: getErrorMessage(result.payload), type: 'error' })
+    } catch (err) {
+      console.error('Login failed:', err)
+      setToast({ show: true, message: extractErrorMessage(err), type: 'error' })
     }
   }
 
-  // Handle Signup
+  // SIGNUP
   const handleSignup = async (e) => {
     e.preventDefault()
     if (signupForm.password !== signupForm.confirmPassword) {
-      setToast({ show: true, message: 'Passwords do not match!', type: 'error' })
+      setToast({ show: true, message: 'Passwords do not match', type: 'error' })
       return
     }
-    const result = await dispatch(registerUser(signupForm))
-    if (registerUser.fulfilled.match(result)) {
-      setToast({ show: true, message: 'Account created successfully!', type: 'success' })
+    try {
+      console.log('Attempting signup with', signupForm)
+      await dispatch(registerUser(signupForm)).unwrap()
+      console.log('Signup succeeded — redirecting to /dashboard')
+      setToast({ show: true, message: 'Account created successfully 🎉', type: 'success' })
       closeModals()
       router.push('/dashboard')
-    } else {
-      setToast({ show: true, message: getErrorMessage(result.payload), type: 'error' })
+    } catch (err) {
+      console.error('Signup failed:', err)
+      const data = err.response?.data
+      if (data?.errors) {
+        setToast({ show: true, message: 'Fix highlighted errors', type: 'error' })
+      } else {
+        setToast({ show: true, message: data?.message || 'Registration failed', type: 'error' })
+      }
     }
   }
 
-  // Handle Logout
-  const handleLogout = async () => {
-    await dispatch(logoutUser())
-    setShowProfileDropdown(false)
-    setToast({ show: true, message: 'Logged out successfully!', type: 'success' })
-    router.push('/')
+  // LOGOUT: defensive + logs + both onMouseDown & onClick handlers
+  const handleLogoutInternal = async (event) => {
+    // prevent parent handlers from immediately hiding the dropdown before we act
+    if (event && event.preventDefault) event.preventDefault()
+    if (event && event.stopPropagation) event.stopPropagation()
+
+    try {
+      console.log('Logout initiated (handler) — tokens from state:', tokens)
+      // dispatch the thunk and await it
+      const result = await dispatch(logoutUser()).unwrap()
+      console.log('logoutUser thunk resolved with:', result)
+      // confirm localStorage cleared
+      console.log('localStorage authUser after logout:', localStorage.getItem('authUser'))
+      console.log('localStorage tokens after logout:', {
+        tokens: localStorage.getItem('tokens'),
+        access: localStorage.getItem('access'),
+        refresh: localStorage.getItem('refresh'),
+      })
+      // close dropdown and navigate
+      setShowProfileDropdown(false)
+      console.log('Navigating to /')
+      router.replace('/')
+    } catch (err) {
+      console.error('Error during logout:', err)
+      // still attempt UI cleanup
+      setShowProfileDropdown(false)
+      router.replace('/')
+    }
   }
 
   return (
     <>
-      {/* Loader */}
       {loading && <Loader fullScreen />}
-
-      {/* Toast */}
       {toast.show && (
         <Toast
           message={toast.message}
@@ -141,314 +153,278 @@ export default function Navbar() {
         />
       )}
 
-      {/* Navbar */}
-      <nav className="fixed top-0 left-0 right-0 z-50 bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900 border-b border-gray-700 shadow-lg">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16 sm:h-20">
-            {/* Logo */}
-            <div className="flex items-center cursor-pointer" onClick={() => router.push('/')}>
-              <Image src={logo} alt="DAW Logger Logo" className="h-10 sm:h-12 w-auto" />
-            </div>
+      <header className="flex items-center justify-between px-6 md:px-16 py-6">
+        <div className="flex items-center gap-4">
+          <Image src={logo} alt="dawlogs" width={140} />
+        </div>
 
-            {/* Desktop Navigation */}
-            <div className="hidden md:flex items-center space-x-8">
-              <a href="#features" className="text-gray-300 hover:text-white font-medium">Features</a>
-              <a href="#pricing" className="text-gray-300 hover:text-white font-medium">Pricing</a>
-              <a href="#docs" className="text-gray-300 hover:text-white font-medium">Documentation</a>
-              <a href="#about" className="text-gray-300 hover:text-white font-medium">About</a>
-            </div>
+        <nav className="hidden md:flex gap-10 text-white/90">
+          <a className="hover:text-white cursor-pointer">Library</a>
+          <a className="hover:text-white cursor-pointer">Sessions</a>
+          <a className="hover:text-white cursor-pointer">Sample Basket</a>
+          <a className="hover:text-white cursor-pointer">Community</a>
+          <a className="hover:text-white cursor-pointer">Insights</a>
+        </nav>
 
-            {/* Desktop Auth Buttons or Profile */}
-            <div className="hidden md:flex items-center space-x-4">
-              {user ? (
-                <div className="relative" ref={dropdownRef}>
+        {user ? (
+          <div className="relative" ref={dropdownRef}>
+            <button
+              onClick={() => {
+                console.log('Profile button clicked — toggling dropdown')
+                setShowProfileDropdown((s) => !s)
+              }}
+              className="flex gap-2 bg-white/10 px-4 py-2 rounded-full"
+              type="button"
+            >
+              <AiOutlineUser /> {user.username} <FiChevronDown />
+            </button>
+
+            {showProfileDropdown && (
+              <div
+                className="absolute right-0 mt-2 bg-white rounded-xl p-3 text-black shadow-lg w-40"
+                role="menu"
+              >
+                <button
+                  type="button"
+                  className="block py-2 w-full text-left"
+                  onClick={() => {
+                    console.log('Dashboard navigation clicked')
+                    setShowProfileDropdown(false)
+                    router.push('/dashboard')
+                  }}
+                >
+                  Dashboard
+                </button>
+
+                {/* IMPORTANT: use both onMouseDown AND onClick, and type="button" */}
+                <button
+                  type="button"
+                  className="block py-2 text-red-600 w-full text-left"
+                  onMouseDown={handleLogoutInternal}
+                  onClick={(e) => {
+                    // also call in onClick to be extra safe
+                    handleLogoutInternal(e)
+                  }}
+                >
+                  Logout
+                </button>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="hidden md:flex gap-3">
+            <button
+              onClick={() => setShowLoginModal(true)}
+              className="bg-white/10 px-6 py-2 rounded-full"
+              type="button"
+            >
+              Sign In
+            </button>
+            <button
+              onClick={() => setShowSignupModal(true)}
+              className="bg-white text-[#0b4e75] px-6 py-2 rounded-full"
+              type="button"
+            >
+              Sign Up
+            </button>
+          </div>
+        )}
+
+        <button
+          className="md:hidden text-3xl text-white"
+          onClick={() => setMobileMenuOpen(true)}
+          type="button"
+        >
+          <AiOutlineMenu />
+        </button>
+      </header>
+
+      {/* Mobile menu, modals, etc. (unchanged from your prior working version) */}
+      {mobileMenuOpen && (
+        <div className="fixed inset-0 bg-black/60 z-50 md:hidden">
+          <div className="absolute right-0 top-0 bg-[#101010] w-64 h-full p-6">
+            <button
+              className="text-white text-3xl mb-6"
+              onClick={() => setMobileMenuOpen(false)}
+              type="button"
+            >
+              <AiOutlineClose />
+            </button>
+
+            <div className="flex flex-col gap-6 text-white text-lg">
+              <a>Library</a>
+              <a>Sessions</a>
+              <a>Sample Basket</a>
+              <a>Community</a>
+              <a>Insights</a>
+
+              {!user ? (
+                <>
                   <button
-                    onClick={() => setShowProfileDropdown(!showProfileDropdown)}
-                    className="flex items-center space-x-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg font-medium transition-colors"
+                    className="bg-white/10 px-6 py-2 rounded-full"
+                    onClick={() => {
+                      setShowLoginModal(true)
+                      setMobileMenuOpen(false)
+                    }}
+                    type="button"
                   >
-                    <div className="w-8 h-8 bg-[#EF8E34] rounded-full flex items-center justify-center">
-                      <AiOutlineUser size={18} />
-                    </div>
-                    <span>{user.username}</span>
-                    <FiChevronDown size={16} />
+                    Sign In
                   </button>
-
-                  {/* Dropdown Menu */}
-                  {showProfileDropdown && (
-                    <div className="absolute right-0 mt-2 w-56 bg-gray-800 border border-gray-700 rounded-lg shadow-xl py-2">
-                      <div className="px-4 py-3 border-b border-gray-700">
-                        <p className="text-white font-semibold">Hi, {user.username}!</p>
-                        <p className="text-gray-400 text-sm truncate">{user.email}</p>
-                      </div>
-                      <button
-                        onClick={() => {
-                          router.push('/dashboard')
-                          setShowProfileDropdown(false)
-                        }}
-                        className="w-full text-left px-4 py-2 text-gray-300 hover:bg-gray-700 hover:text-white flex items-center space-x-2"
-                      >
-                        <AiOutlineUser size={18} />
-                        <span>View Dashboard</span>
-                      </button>
-                      <button
-                        onClick={handleLogout}
-                        className="w-full text-left px-4 py-2 text-red-400 hover:bg-gray-700 hover:text-red-300 flex items-center space-x-2"
-                      >
-                        <AiOutlineLogout size={18} />
-                        <span>Logout</span>
-                      </button>
-                    </div>
-                  )}
-                </div>
+                  <button
+                    className="bg-white text-black px-6 py-2 rounded-full"
+                    onClick={() => {
+                      setShowSignupModal(true)
+                      setMobileMenuOpen(false)
+                    }}
+                    type="button"
+                  >
+                    Sign Up
+                  </button>
+                </>
               ) : (
                 <>
-                  <button onClick={openLogin} className="flex items-center space-x-2 px-4 py-2 text-white border border-primary hover:bg-[#EF8E34]/10 rounded-lg font-medium">
-                    <AiOutlineLogin size={18} />
-                    <span>Login</span>
+                  <button
+                    onClick={() => {
+                      setMobileMenuOpen(false)
+                      router.push('/dashboard')
+                    }}
+                    type="button"
+                  >
+                    Dashboard
                   </button>
-                  <button onClick={openSignup} className="flex items-center space-x-2 px-4 py-2 bg-[#EF8E34] text-white rounded-lg font-medium shadow-lg">
-                    <AiOutlineUserAdd size={18} />
-                    <span>Sign Up</span>
+                  <button
+                    onMouseDown={handleLogoutInternal}
+                    onClick={handleLogoutInternal}
+                    className="text-red-500"
+                    type="button"
+                  >
+                    Logout
                   </button>
                 </>
               )}
-            </div>
-
-            {/* Mobile Menu Button */}
-            <button onClick={toggleMenu} className="md:hidden text-white p-2 rounded-lg hover:bg-gray-700 transition-colors">
-              {isMenuOpen ? <AiOutlineClose size={24} /> : <AiOutlineMenu size={24} />}
-            </button>
-          </div>
-
-          {/* Mobile Menu */}
-          {isMenuOpen && (
-            <div className="md:hidden py-4 border-t border-gray-700">
-              <div className="flex flex-col space-y-4">
-                <a href="#features" className="text-gray-300 hover:text-white px-2 py-2">Features</a>
-                <a href="#pricing" className="text-gray-300 hover:text-white px-2 py-2">Pricing</a>
-                <a href="#docs" className="text-gray-300 hover:text-white px-2 py-2">Documentation</a>
-                <a href="#about" className="text-gray-300 hover:text-white px-2 py-2">About</a>
-                
-                <div className="flex flex-col space-y-2 pt-4 border-t border-gray-700">
-                  {user ? (
-                    <>
-                      <div className="px-2 py-2 text-white">
-                        <p className="font-semibold">Hi, {user.username}!</p>
-                        <p className="text-gray-400 text-sm">{user.email}</p>
-                      </div>
-                      <button
-                        onClick={() => {
-                          router.push('/dashboard')
-                          setIsMenuOpen(false)
-                        }}
-                        className="flex items-center justify-center space-x-2 px-4 py-2 text-white border border-primary rounded-lg"
-                      >
-                        <AiOutlineUser size={18} />
-                        <span>View Dashboard</span>
-                      </button>
-                      <button
-                        onClick={handleLogout}
-                        className="flex items-center justify-center space-x-2 px-4 py-2 bg-red-600 text-white rounded-lg"
-                      >
-                        <AiOutlineLogout size={18} />
-                        <span>Logout</span>
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <button onClick={openLogin} className="flex items-center justify-center space-x-2 px-4 py-2 text-white border border-primary rounded-lg">
-                        <AiOutlineLogin size={18} />
-                        <span>Login</span>
-                      </button>
-                      <button onClick={openSignup} className="flex items-center justify-center space-x-2 px-4 py-2 bg-[#EF8E34] text-white rounded-lg">
-                        <AiOutlineUserAdd size={18} />
-                        <span>Sign Up</span>
-                      </button>
-                    </>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      </nav>
-
-      {/* Login Modal */}
-      {showLoginModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <div className="bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md relative border border-gray-700">
-            <button onClick={closeModals} className="absolute top-4 right-4 text-gray-400 hover:text-white">
-              <AiOutlineClose size={24} />
-            </button>
-            <div className="p-8">
-              <h2 className="text-3xl font-bold text-white mb-2">Welcome Back</h2>
-              <p className="text-gray-400 mb-6">Log in to your DAW Logger account</p>
-              <form onSubmit={handleLogin} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Username</label>
-                  <input
-                    type="text"
-                    value={loginForm.username}
-                    onChange={(e) => setLoginForm({ ...loginForm, username: e.target.value })}
-                    className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-primary"
-                    placeholder="Enter your username"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Password</label>
-                  <div className="relative">
-                    <input
-                      type={showPassword ? 'text' : 'password'}
-                      value={loginForm.password}
-                      onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })}
-                      className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-primary"
-                      placeholder="Enter your password"
-                      required
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
-                    >
-                      {showPassword ? <AiOutlineEyeInvisible size={20} /> : <AiOutlineEye size={20} />}
-                    </button>
-                  </div>
-                </div>
-                <LoaderButton type="submit" loading={loading} className="w-full py-3 bg-[#EF8E34] text-white rounded-lg font-semibold shadow-lg">
-                  Log In
-                </LoaderButton>
-              </form>
-              <p className="mt-6 text-center text-gray-400">
-                Don't have an account?{' '}
-                <button onClick={openSignup} className="text-[#EF8E34] font-semibold">
-                  Sign up
-                </button>
-              </p>
             </div>
           </div>
         </div>
       )}
 
-      {/* Signup Modal */}
-      {showSignupModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 overflow-y-auto">
-          <div className="bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md relative border border-gray-700 my-8">
-            <button onClick={closeModals} className="absolute top-4 right-4 text-gray-400 hover:text-white z-10">
-              <AiOutlineClose size={24} />
+      {/* LOGIN MODAL */}
+      {showLoginModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xl">
+          <div className="relative w-full max-w-md p-8 bg-white/10 backdrop-blur-2xl border border-white/20 rounded-3xl shadow-2xl">
+            <button onClick={closeModals} className="absolute top-4 right-4 text-white text-xl" type="button">
+              ✕
             </button>
-            <div className="p-8">
-              <h2 className="text-3xl font-bold text-white mb-2">Create Account</h2>
-              <p className="text-gray-400 mb-6">Join DAW Logger today</p>
-              <form onSubmit={handleSignup} className="space-y-4">
-                {/* Names */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">First Name</label>
-                    <input
-                      type="text"
-                      value={signupForm.firstName}
-                      onChange={(e) => setSignupForm({ ...signupForm, firstName: e.target.value })}
-                      className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-primary"
-                      placeholder="John"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">Last Name</label>
-                    <input
-                      type="text"
-                      value={signupForm.lastName}
-                      onChange={(e) => setSignupForm({ ...signupForm, lastName: e.target.value })}
-                      className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-primary"
-                      placeholder="Doe"
-                    />
-                  </div>
-                </div>
 
-                {/* Username & Email */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Username *</label>
-                  <input
-                    type="text"
-                    value={signupForm.username}
-                    onChange={(e) => setSignupForm({ ...signupForm, username: e.target.value })}
-                    className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-primary"
-                    placeholder="Choose a username"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Email *</label>
-                  <input
-                    type="email"
-                    value={signupForm.email}
-                    onChange={(e) => setSignupForm({ ...signupForm, email: e.target.value })}
-                    className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-primary"
-                    placeholder="your@email.com"
-                    required
-                  />
-                </div>
+            <h2 className="text-2xl font-bold mb-6">Login</h2>
 
-                {/* Passwords */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Password *</label>
-                  <div className="relative">
-                    <input
-                      type={showPassword ? 'text' : 'password'}
-                      value={signupForm.password}
-                      onChange={(e) => setSignupForm({ ...signupForm, password: e.target.value })}
-                      className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-primary"
-                      placeholder="Create a strong password"
-                      required
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
-                    >
-                      {showPassword ? <AiOutlineEyeInvisible size={20} /> : <AiOutlineEye size={20} />}
-                    </button>
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Confirm Password *</label>
-                  <div className="relative">
-                    <input
-                      type={showConfirmPassword ? 'text' : 'password'}
-                      value={signupForm.confirmPassword}
-                      onChange={(e) => setSignupForm({ ...signupForm, confirmPassword: e.target.value })}
-                      className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-primary"
-                      placeholder="Confirm your password"
-                      required
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
-                    >
-                      {showConfirmPassword ? <AiOutlineEyeInvisible size={20} /> : <AiOutlineEye size={20} />}
-                    </button>
-                  </div>
-                </div>
+            <form onSubmit={handleLogin} className="space-y-4">
+              <input
+                value={loginForm.username}
+                onChange={(e) => setLoginForm({ ...loginForm, username: e.target.value })}
+                className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/20 text-white"
+                placeholder="Username"
+              />
 
-                {/* Terms */}
-                <label className="flex items-start text-sm text-gray-300">
-                  <input type="checkbox" className="mr-2 mt-1 accent-primary" required />
-                  <span>I agree to the Terms of Service and Privacy Policy</span>
-                </label>
-
-                <LoaderButton type="submit" loading={loading} className="w-full py-3 bg-[#EF8E34] text-white rounded-lg font-semibold shadow-lg">
-                  Create Account
-                </LoaderButton>
-              </form>
-
-              <p className="mt-6 text-center text-gray-400">
-                Already have an account?{' '}
-                <button onClick={openLogin} className="text-[#EF8E34] font-semibold">
-                  Log in
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={loginForm.password}
+                  onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })}
+                  className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/20 text-white pr-10"
+                  placeholder="Password"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-white"
+                >
+                  {showPassword ? '🙈' : '👁️'}
                 </button>
-              </p>
-            </div>
+              </div>
+
+              <LoaderButton
+                type="submit"
+                loading={loading}
+                className="w-full py-3 rounded-xl bg-white/20 hover:bg-white/30"
+              >
+                Login
+              </LoaderButton>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* SIGNUP MODAL */}
+      {showSignupModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xl">
+          <div className="relative w-full max-w-md p-8 bg-white/10 backdrop-blur-2xl border border-white/20 rounded-3xl shadow-2xl">
+            <button onClick={closeModals} className="absolute top-4 right-4 text-white text-xl" type="button">
+              ✕
+            </button>
+
+            <h2 className="text-2xl font-semibold mb-6">Create Account</h2>
+
+            <form onSubmit={handleSignup} className="space-y-4">
+              <input
+                placeholder="Username"
+                value={signupForm.username}
+                onChange={(e) => {
+                  setSignupForm({ ...signupForm, username: e.target.value })
+                  dispatch(clearError())
+                }}
+                className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/20 text-white"
+              />
+              {fieldErrors?.username && <p className="text-red-500 text-sm mt-1">{fieldErrors.username[0]}</p>}
+
+              <input
+                placeholder="Email"
+                value={signupForm.email}
+                onChange={(e) => {
+                  setSignupForm({ ...signupForm, email: e.target.value })
+                  dispatch(clearError())
+                }}
+                className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/20 text-white"
+              />
+              {fieldErrors?.email && <p className="text-red-500 text-sm mt-1">{fieldErrors.email[0]}</p>}
+
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="Password"
+                  value={signupForm.password}
+                  onChange={(e) => {
+                    setSignupForm({ ...signupForm, password: e.target.value })
+                    dispatch(clearError())
+                  }}
+                  className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/20 pr-10 text-white"
+                />
+                {fieldErrors?.password && <p className="text-red-500 text-sm mt-1">{fieldErrors.password[0]}</p>}
+
+                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-white">
+                  {showPassword ? '🙈' : '👁️'}
+                </button>
+              </div>
+
+              <div className="relative">
+                <input
+                  type={showConfirmPassword ? 'text' : 'password'}
+                  placeholder="Confirm Password"
+                  value={signupForm.confirmPassword}
+                  onChange={(e) =>
+                    setSignupForm({ ...signupForm, confirmPassword: e.target.value })
+                  }
+                  className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/20 pr-10 text-white"
+                />
+
+                <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-white">
+                  {showConfirmPassword ? '🙈' : '👁️'}
+                </button>
+              </div>
+
+              <LoaderButton type="submit" loading={loading} className="w-full py-3 rounded-xl bg-white/20 hover:bg-white/30">
+                Sign Up
+              </LoaderButton>
+            </form>
           </div>
         </div>
       )}

@@ -27,9 +27,14 @@ export const fetchProjectActivity = createAsyncThunk(
       if (action) {
         url += `&action=${action}`
       }
+        const { tokens } = getState().auth
       const response = await axios.get(url, {
-        headers: getAuthHeaders(getState)
+        headers: {
+          'Authorization': `Bearer ${tokens.access}`
+        }
       })
+    
+   
       return response.data
     } catch (err) {
       return rejectWithValue(err.response?.data || { message: 'Failed to fetch activity' })
@@ -42,9 +47,13 @@ export const fetchUserActivity = createAsyncThunk(
   'activity/fetchByUser',
   async (limit = 50, { getState, rejectWithValue }) => {
     try {
-      const response = await axios.get(`${API_BASE}user/?limit=${limit}`, {
-        headers: getAuthHeaders(getState)
+      const { tokens } = getState().auth
+      const response = await axios.get(`${API_BASE}user/?limit=${limit}`,  {
+        headers: {
+          'Authorization': `Bearer ${tokens.access}`
+        }
       })
+
       return response.data
     } catch (err) {
       return rejectWithValue(err.response?.data || { message: 'Failed to fetch user activity' })

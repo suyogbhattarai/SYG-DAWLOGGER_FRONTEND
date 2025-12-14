@@ -1,9 +1,8 @@
-// src/components/ui/Loader.jsx
 'use client'
 import React from 'react'
 
 export default function Loader({ size = 'medium', fullScreen = false }) {
-  const sizeClasses = {
+  const sizeMap = {
     small: 'w-5 h-5 border-2',
     medium: 'w-8 h-8 border-3',
     large: 'w-12 h-12 border-4',
@@ -11,14 +10,14 @@ export default function Loader({ size = 'medium', fullScreen = false }) {
 
   const spinner = (
     <div
-      className={`${sizeClasses[size]} border-[#EF8E34] border-t-transparent rounded-full animate-spin`}
+      className={`${sizeMap[size]} border-white/70 border-t-transparent rounded-full animate-spin`}
     />
   )
 
   if (fullScreen) {
     return (
-      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm">
-        <div className="bg-gray-800 rounded-2xl p-8 shadow-2xl">
+      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-xl">
+        <div className="bg-white/10 border border-white/20 backdrop-blur-2xl rounded-2xl p-10 shadow-2xl">
           {spinner}
         </div>
       </div>
@@ -42,10 +41,10 @@ export function LoaderButton({
       type={type}
       onClick={onClick}
       disabled={loading || disabled}
-      className={`relative ${className} ${loading || disabled ? 'opacity-70 cursor-not-allowed' : ''}`}
+      className={`relative ${className} ${loading ? 'opacity-60 cursor-not-allowed' : ''}`}
     >
       {loading && (
-        <div className="absolute inset-0 flex items-center justify-center">
+        <div className="absolute inset-0 flex items-center justify-center backdrop-blur-sm rounded">
           <Loader size="small" />
         </div>
       )}

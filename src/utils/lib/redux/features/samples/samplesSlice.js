@@ -1,17 +1,12 @@
 // src/lib/redux/features/samples/samplesSlice.js
 'use client'
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit'
-import axios from 'axios'
+import axiosInstance from '@/utils/lib/axios/axiosInstance'
 
-const API_BASE = 'http://127.0.0.1:8000/api/samples/'
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL_SAMPLES || 'http://127.0.0.1:8000/api/samples/'
 
-// Helper to get auth headers
-const getAuthHeaders = (getState) => {
-  const { auth } = getState()
-  return {
-    'Authorization': `Bearer ${auth.apiKey}`,
-  }
-}
+console.log('🔧 Samples Slice - API_BASE:', API_BASE)
+console.log('🔧 Samples Slice - axiosInstance loaded:', !!axiosInstance)
 
 // -----------------------------------------
 // Thunks
@@ -20,11 +15,9 @@ const getAuthHeaders = (getState) => {
 // Fetch samples for a project
 export const fetchProjectSamples = createAsyncThunk(
   'samples/fetchByProject',
-  async (projectId, { getState, rejectWithValue }) => {
+  async (projectId, { rejectWithValue }) => {
     try {
-      const response = await axios.get(`${API_BASE}projects/${projectId}/`, {
-        headers: getAuthHeaders(getState)
-      })
+      const response = await axiosInstance.get(`${API_BASE}projects/${projectId}/`)
       return response.data
     } catch (err) {
       return rejectWithValue(err.response?.data || { message: 'Failed to fetch samples' })
@@ -35,11 +28,9 @@ export const fetchProjectSamples = createAsyncThunk(
 // Fetch single sample
 export const fetchSampleById = createAsyncThunk(
   'samples/fetchById',
-  async (sampleId, { getState, rejectWithValue }) => {
+  async (sampleId, { rejectWithValue }) => {
     try {
-      const response = await axios.get(`${API_BASE}${sampleId}/`, {
-        headers: getAuthHeaders(getState)
-      })
+      const response = await axiosInstance.get(`${API_BASE}${sampleId}/`)
       return response.data
     } catch (err) {
       return rejectWithValue(err.response?.data || { message: 'Failed to fetch sample' })
@@ -50,14 +41,13 @@ export const fetchSampleById = createAsyncThunk(
 // Upload sample
 export const uploadSample = createAsyncThunk(
   'samples/upload',
-  async ({ projectId, formData }, { getState, rejectWithValue }) => {
+  async ({ projectId, formData }, { rejectWithValue }) => {
     try {
-      const response = await axios.post(
+      const response = await axiosInstance.post(
         `${API_BASE}projects/${projectId}/`,
         formData,
         {
           headers: {
-            ...getAuthHeaders(getState),
             'Content-Type': 'multipart/form-data',
           }
         }
@@ -72,11 +62,9 @@ export const uploadSample = createAsyncThunk(
 // Update sample
 export const updateSample = createAsyncThunk(
   'samples/update',
-  async ({ sampleId, data }, { getState, rejectWithValue }) => {
+  async ({ sampleId, data }, { rejectWithValue }) => {
     try {
-      const response = await axios.put(`${API_BASE}${sampleId}/`, data, {
-        headers: getAuthHeaders(getState)
-      })
+      const response = await axiosInstance.put(`${API_BASE}${sampleId}/`, data)
       return response.data
     } catch (err) {
       return rejectWithValue(err.response?.data || { message: 'Failed to update sample' })
@@ -87,11 +75,9 @@ export const updateSample = createAsyncThunk(
 // Delete sample
 export const deleteSample = createAsyncThunk(
   'samples/delete',
-  async (sampleId, { getState, rejectWithValue }) => {
+  async (sampleId, { rejectWithValue }) => {
     try {
-      await axios.delete(`${API_BASE}${sampleId}/`, {
-        headers: getAuthHeaders(getState)
-      })
+      await axiosInstance.delete(`${API_BASE}${sampleId}/`)
       return sampleId
     } catch (err) {
       return rejectWithValue(err.response?.data || { message: 'Failed to delete sample' })
@@ -107,8 +93,10 @@ const initialState = {
   samples: {},
   currentSample: null,
   loading: false,
+  actionLoading: false, // For upload/update/delete operations
   uploadProgress: 0,
   error: null,
+  actionError: null, // For upload/update/delete errors
 }
 
 const samplesSlice = createSlice({
@@ -118,11 +106,30 @@ const samplesSlice = createSlice({
     clearError: (state) => {
       state.error = null
     },
+    clearActionError: (state) => {
+      state.actionError = null
+    },
+    clearAllErrors: (state) => {
+      state.error = null
+      state.actionError = null
+    },
     setUploadProgress: (state, action) => {
       state.uploadProgress = action.payload
     },
     resetUploadProgress: (state) => {
       state.uploadProgress = 0
+    },
+    clearCurrentSample: (state) => {
+      state.currentSample = null
+    },
+    resetSamplesState: (state) => {
+      state.samples = {}
+      state.currentSample = null
+      state.loading = false
+      state.actionLoading = false
+      state.uploadProgress = 0
+      state.error = null
+      state.actionError = null
     }
   },
   extraReducers: (builder) => {
@@ -136,38 +143,57 @@ const samplesSlice = createSlice({
         state.loading = false
         const projectId = action.payload.project_id
         state.samples[projectId] = action.payload.samples
+        state.error = null
       })
       .addCase(fetchProjectSamples.rejected, (state, action) => {
         state.loading = false
-        state.error = action.payload?.message || 'Failed to fetch samples'
+        state.error = action.payload?.message || action.payload?.detail || 'Failed to fetch samples'
       })
 
       // Fetch single sample
+      .addCase(fetchSampleById.pending, (state) => {
+        state.loading = true
+        state.error = null
+      })
       .addCase(fetchSampleById.fulfilled, (state, action) => {
+        state.loading = false
         state.currentSample = action.payload
+        state.error = null
+      })
+      .addCase(fetchSampleById.rejected, (state, action) => {
+        state.loading = false
+        state.error = action.payload?.message || action.payload?.detail || 'Failed to fetch sample'
       })
 
       // Upload sample
       .addCase(uploadSample.pending, (state) => {
-        state.loading = true
-        state.error = null
+        state.actionLoading = true
+        state.actionError = null
       })
       .addCase(uploadSample.fulfilled, (state, action) => {
-        state.loading = false
+        state.actionLoading = false
         state.uploadProgress = 0
         const projectId = action.payload.project
         if (state.samples[projectId]) {
           state.samples[projectId].push(action.payload)
+        } else {
+          state.samples[projectId] = [action.payload]
         }
+        state.actionError = null
       })
       .addCase(uploadSample.rejected, (state, action) => {
-        state.loading = false
+        state.actionLoading = false
         state.uploadProgress = 0
-        state.error = action.payload?.message || 'Failed to upload sample'
+        state.actionError = action.payload?.message || action.payload?.detail || 'Failed to upload sample'
       })
 
       // Update sample
+      .addCase(updateSample.pending, (state) => {
+        state.actionLoading = true
+        state.actionError = null
+      })
       .addCase(updateSample.fulfilled, (state, action) => {
+        state.actionLoading = false
         Object.keys(state.samples).forEach(projectId => {
           const index = state.samples[projectId].findIndex(s => s.id === action.payload.id)
           if (index !== -1) {
@@ -177,18 +203,45 @@ const samplesSlice = createSlice({
         if (state.currentSample?.id === action.payload.id) {
           state.currentSample = action.payload
         }
+        state.actionError = null
+      })
+      .addCase(updateSample.rejected, (state, action) => {
+        state.actionLoading = false
+        state.actionError = action.payload?.message || action.payload?.detail || 'Failed to update sample'
       })
 
       // Delete sample
+      .addCase(deleteSample.pending, (state) => {
+        state.actionLoading = true
+        state.actionError = null
+      })
       .addCase(deleteSample.fulfilled, (state, action) => {
+        state.actionLoading = false
         Object.keys(state.samples).forEach(projectId => {
           state.samples[projectId] = state.samples[projectId].filter(
             s => s.id !== action.payload
           )
         })
+        if (state.currentSample?.id === action.payload) {
+          state.currentSample = null
+        }
+        state.actionError = null
+      })
+      .addCase(deleteSample.rejected, (state, action) => {
+        state.actionLoading = false
+        state.actionError = action.payload?.message || action.payload?.detail || 'Failed to delete sample'
       })
   },
 })
 
-export const { clearError, setUploadProgress, resetUploadProgress } = samplesSlice.actions
+export const { 
+  clearError, 
+  clearActionError, 
+  clearAllErrors, 
+  setUploadProgress, 
+  resetUploadProgress,
+  clearCurrentSample,
+  resetSamplesState 
+} = samplesSlice.actions
+
 export default samplesSlice.reducer

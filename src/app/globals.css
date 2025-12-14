@@ -1,6 +1,19 @@
+/* === GOOGLE FONTS === */
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Darker+Grotesque:wght@300..900&display=swap" rel="stylesheet');
 @import "tailwindcss/preflight";
 @import "tailwindcss/theme";
 @import "tailwindcss/utilities";
+
+/* === FONT DEFAULTS === */
+html, body {
+  font-family: 'Space Grotesk', sans-serif;
+}
+
+/* Optional utility if you want to explicitly force it */
+.font-space {
+  font-family: 'Space Grotesk', sans-serif;
+}
 
 @layer utilities {
   /* Toast animation */
@@ -48,3 +61,4 @@
 ::-webkit-scrollbar-thumb:hover {
   background: #6b7280;
 }
+

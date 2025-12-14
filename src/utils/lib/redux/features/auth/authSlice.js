@@ -2,33 +2,33 @@
 'use client'
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit'
 import axios from 'axios'
+import axiosInstance from '@/utils/lib/axios/axiosInstance'
 
-const API_BASE = 'http://127.0.0.1:8000/api/accounts/'
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL_ACCOUNTS || 'http://127.0.0.1:8000/api/accounts/'
 
 // -----------------------------------------
 // Thunks
 // -----------------------------------------
-
 export const registerUser = createAsyncThunk(
   'auth/registerUser',
   async (userData, { rejectWithValue }) => {
     try {
+      // Use regular axios for registration (no auth needed)
       const response = await axios.post(`${API_BASE}register/`, userData)
-      console.log('🔍 Register Response:', response.data)
-      
-      // API returns data nested under 'data' key
+
+      if (!response.data.success) {
+        return rejectWithValue(response.data)
+      }
+
       const data = {
         user: response.data.data.user,
         api_key: response.data.data.api_key,
-        tokens: response.data.data.tokens
+        tokens: response.data.data.tokens,
       }
-      
-      console.log('💾 Storing to localStorage:', data)
+
       localStorage.setItem('authUser', JSON.stringify(data))
-      
       return data
     } catch (err) {
-      console.error('❌ Register Error:', err.response?.data)
       return rejectWithValue(err.response?.data || { message: 'Registration failed' })
     }
   }
@@ -39,22 +39,11 @@ export const loginUser = createAsyncThunk(
   async (credentials, { rejectWithValue }) => {
     try {
       console.log('🔑 Login attempt with:', credentials)
+      // Use regular axios for login (no auth needed)
       const response = await axios.post(`${API_BASE}login/`, credentials)
       console.log('🔍 Login Response:', response.data)
       
-      // API returns data nested under 'data' key
       const apiData = response.data.data
-      
-      // Check what we actually received
-      if (!apiData.user) {
-        console.error('⚠️ No user in response!')
-      }
-      if (!apiData.api_key) {
-        console.error('⚠️ No api_key in response!')
-      }
-      if (!apiData.tokens) {
-        console.error('⚠️ No tokens in response!')
-      }
       
       const data = {
         user: apiData.user,
@@ -65,7 +54,6 @@ export const loginUser = createAsyncThunk(
       console.log('💾 Storing to localStorage:', data)
       localStorage.setItem('authUser', JSON.stringify(data))
       
-      // Verify it was stored
       const stored = localStorage.getItem('authUser')
       console.log('✅ Verified localStorage:', stored)
       
@@ -82,19 +70,22 @@ export const logoutUser = createAsyncThunk(
   async (_, { getState }) => {
     try {
       const { tokens } = getState().auth
+
       if (tokens?.access) {
-        await axios.post(`${API_BASE}logout/`, {}, {
-          headers: {
-            'Authorization': `Bearer ${tokens.access}`
-          }
-        })
+        // Use axiosInstance for authenticated requests
+        await axiosInstance.post(`${API_BASE}logout/`)
       }
     } catch (err) {
       console.error('Logout error:', err)
     } finally {
+      // Clear everything related to auth
       localStorage.removeItem('authUser')
-      console.log('🗑️ Cleared localStorage')
+      localStorage.removeItem('tokens')
+      localStorage.removeItem('access')
+      localStorage.removeItem('refresh')
+      console.log('🗑️ All auth data cleared')
     }
+
     return null
   }
 )
@@ -124,14 +115,10 @@ export const loadUserFromStorage = createAsyncThunk(
 
 export const checkAuth = createAsyncThunk(
   'auth/checkAuth',
-  async (_, { getState, rejectWithValue }) => {
+  async (_, { rejectWithValue }) => {
     try {
-      const { tokens } = getState().auth
-      const response = await axios.get(`${API_BASE}check/`, {
-        headers: {
-          'Authorization': `Bearer ${tokens.access}`
-        }
-      })
+      // Use axiosInstance - it will add auth header automatically
+      const response = await axiosInstance.get(`${API_BASE}check/`)
       return response.data
     } catch (err) {
       return rejectWithValue(err.response?.data || { message: 'Auth check failed' })
@@ -141,14 +128,10 @@ export const checkAuth = createAsyncThunk(
 
 export const updateProfile = createAsyncThunk(
   'auth/updateProfile',
-  async (profileData, { getState, rejectWithValue }) => {
+  async (profileData, { rejectWithValue }) => {
     try {
-      const { tokens } = getState().auth
-      const response = await axios.put(`${API_BASE}profile/update/`, profileData, {
-        headers: {
-          'Authorization': `Bearer ${tokens.access}`
-        }
-      })
+      // Use axiosInstance - it will add auth header automatically
+      const response = await axiosInstance.put(`${API_BASE}profile/update/`, profileData)
       return response.data.user
     } catch (err) {
       return rejectWithValue(err.response?.data || { message: 'Profile update failed' })
@@ -158,14 +141,10 @@ export const updateProfile = createAsyncThunk(
 
 export const changePassword = createAsyncThunk(
   'auth/changePassword',
-  async (passwordData, { getState, rejectWithValue }) => {
+  async (passwordData, { rejectWithValue }) => {
     try {
-      const { tokens } = getState().auth
-      const response = await axios.post(`${API_BASE}profile/change-password/`, passwordData, {
-        headers: {
-          'Authorization': `Bearer ${tokens.access}`
-        }
-      })
+      // Use axiosInstance - it will add auth header automatically
+      const response = await axiosInstance.post(`${API_BASE}profile/change-password/`, passwordData)
       return response.data
     } catch (err) {
       return rejectWithValue(err.response?.data || { message: 'Password change failed' })
@@ -175,14 +154,10 @@ export const changePassword = createAsyncThunk(
 
 export const regenerateAPIKey = createAsyncThunk(
   'auth/regenerateAPIKey',
-  async (_, { getState, rejectWithValue }) => {
+  async (_, { rejectWithValue }) => {
     try {
-      const { tokens } = getState().auth
-      const response = await axios.post(`${API_BASE}profile/regenerate-api-key/`, {}, {
-        headers: {
-          'Authorization': `Bearer ${tokens.access}`
-        }
-      })
+      // Use axiosInstance - it will add auth header automatically
+      const response = await axiosInstance.post(`${API_BASE}profile/regenerate-api-key/`)
       return response.data.api_key
     } catch (err) {
       return rejectWithValue(err.response?.data || { message: 'API key regeneration failed' })
@@ -192,14 +167,10 @@ export const regenerateAPIKey = createAsyncThunk(
 
 export const searchUsers = createAsyncThunk(
   'auth/searchUsers',
-  async (query, { getState, rejectWithValue }) => {
+  async (query, { rejectWithValue }) => {
     try {
-      const { tokens } = getState().auth
-      const response = await axios.get(`${API_BASE}users/search/?q=${query}`, {
-        headers: {
-          'Authorization': `Bearer ${tokens.access}`
-        }
-      })
+      // Use axiosInstance - it will add auth header automatically
+      const response = await axiosInstance.get(`${API_BASE}users/search/?q=${query}`)
       return response.data
     } catch (err) {
       return rejectWithValue(err.response?.data || { message: 'User search failed' })
@@ -218,6 +189,7 @@ const initialState = {
   searchResults: [],
   loading: false,
   error: null,
+  fieldErrors: {},
   initialized: false,
 }
 
@@ -227,9 +199,21 @@ const authSlice = createSlice({
   reducers: {
     clearError: (state) => {
       state.error = null
+      state.fieldErrors = {}
     },
     clearSearchResults: (state) => {
       state.searchResults = []
+    },
+    // New action for automatic logout from interceptor
+    resetAuth: (state) => {
+      state.user = null
+      state.apiKey = null
+      state.tokens = null
+      state.searchResults = []
+      state.error = null
+      state.fieldErrors = {}
+      state.initialized = true
+      console.log('🔒 Auth state reset (session expired)')
     }
   },
   extraReducers: (builder) => {
@@ -238,6 +222,7 @@ const authSlice = createSlice({
       .addCase(registerUser.pending, (state) => {
         state.loading = true
         state.error = null
+        state.fieldErrors = {}
       })
       .addCase(registerUser.fulfilled, (state, action) => {
         console.log('✅ Register fulfilled with:', action.payload)
@@ -245,12 +230,15 @@ const authSlice = createSlice({
         state.user = action.payload.user
         state.apiKey = action.payload.api_key
         state.tokens = action.payload.tokens
+        state.error = null
+        state.fieldErrors = {}
         state.initialized = true
       })
       .addCase(registerUser.rejected, (state, action) => {
         console.log('❌ Register rejected:', action.payload)
         state.loading = false
         state.error = action.payload?.message || 'Registration failed'
+        state.fieldErrors = action.payload?.errors || {}
         state.initialized = true
       })
 
@@ -258,6 +246,7 @@ const authSlice = createSlice({
       .addCase(loginUser.pending, (state) => {
         state.loading = true
         state.error = null
+        state.fieldErrors = {}
       })
       .addCase(loginUser.fulfilled, (state, action) => {
         console.log('✅ Login fulfilled with:', action.payload)
@@ -265,9 +254,10 @@ const authSlice = createSlice({
         state.user = action.payload.user
         state.apiKey = action.payload.api_key
         state.tokens = action.payload.tokens
+        state.error = null
+        state.fieldErrors = {}
         state.initialized = true
         
-        // Log the state after update
         console.log('📊 New state:', {
           user: state.user,
           apiKey: state.apiKey,
@@ -290,6 +280,9 @@ const authSlice = createSlice({
         state.user = null
         state.apiKey = null
         state.tokens = null
+        state.searchResults = []
+        state.error = null
+        state.fieldErrors = {}
         state.initialized = true
       })
 
@@ -315,6 +308,12 @@ const authSlice = createSlice({
       // Check auth
       .addCase(checkAuth.fulfilled, (state, action) => {
         state.user = action.payload.user
+      })
+      .addCase(checkAuth.rejected, (state) => {
+        // If auth check fails, clear state
+        state.user = null
+        state.apiKey = null
+        state.tokens = null
       })
 
       // Update profile
@@ -342,5 +341,5 @@ const authSlice = createSlice({
   },
 })
 
-export const { clearError, clearSearchResults } = authSlice.actions
+export const { clearError, clearSearchResults, resetAuth } = authSlice.actions
 export default authSlice.reducer
