@@ -16,8 +16,8 @@ export default function Loader({ size = 'medium', fullScreen = false }) {
 
   if (fullScreen) {
     return (
-      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-xl">
-        <div className="bg-white/10 border border-white/20 backdrop-blur-2xl rounded-2xl p-10 shadow-2xl">
+      <div className="fixed inset-0 z-[100] flex items-center justify-center backdrop-blur-md bg-black/5">
+        <div className="bg-white/10 border border-white/30 backdrop-blur-xl rounded-2xl p-10 shadow-[0_8px_32px_0_rgba(255,255,255,0.1)]">
           {spinner}
         </div>
       </div>
@@ -44,7 +44,7 @@ export function LoaderButton({
       className={`relative ${className} ${loading ? 'opacity-60 cursor-not-allowed' : ''}`}
     >
       {loading && (
-        <div className="absolute inset-0 flex items-center justify-center backdrop-blur-sm rounded">
+        <div className="absolute inset-0 flex items-center justify-center backdrop-blur-sm bg-black/2 rounded">
           <Loader size="small" />
         </div>
       )}

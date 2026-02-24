@@ -61,6 +61,40 @@ export const uploadVersion = createAsyncThunk(
   }
 )
 
+// Convert folder to JSON (NEW)
+export const convertFolderToJson = createAsyncThunk(
+  'versions/convertFolderToJson',
+  async (formData, { rejectWithValue }) => {
+    try {
+      const response = await axiosInstance.post(`${API_BASE}folder-to-json/`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      })
+      return response.data
+    } catch (err) {
+      return rejectWithValue(err.response?.data || { message: 'Failed to convert folder' })
+    }
+  }
+)
+
+// Upload folder directly (NEW)
+export const uploadFolder = createAsyncThunk(
+  'versions/uploadFolder',
+  async (formData, { rejectWithValue }) => {
+    try {
+      const response = await axiosInstance.post(`${API_BASE}folder-upload/`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      })
+      return response.data
+    } catch (err) {
+      return rejectWithValue(err.response?.data || { message: 'Failed to upload folder' })
+    }
+  }
+)
+
 // Delete version
 export const deleteVersion = createAsyncThunk(
   'versions/delete',
@@ -165,13 +199,16 @@ const initialState = {
   fileList: {},
   downloadRequests: {},
   pushStatus: null,
+  folderConversionData: null,
   loading: false,
   fileListLoading: false,
   downloadLoading: false,
   deleteLoading: false,
+  folderUploadLoading: false,
   error: null,
   fileListError: null,
   downloadError: null,
+  folderUploadError: null,
 }
 
 const versionsSlice = createSlice({
@@ -182,9 +219,13 @@ const versionsSlice = createSlice({
       state.error = null
       state.fileListError = null
       state.downloadError = null
+      state.folderUploadError = null
     },
     clearPushStatus: (state) => {
       state.pushStatus = null
+    },
+    clearFolderConversionData: (state) => {
+      state.folderConversionData = null
     },
     updateDownloadProgress: (state, action) => {
       const { versionId, status, progress, downloadId } = action.payload
@@ -256,6 +297,38 @@ const versionsSlice = createSlice({
       .addCase(uploadVersion.rejected, (state, action) => {
         state.loading = false
         state.error = action.payload?.message || 'Failed to upload version'
+      })
+
+      // Convert folder to JSON
+      .addCase(convertFolderToJson.pending, (state) => {
+        state.folderUploadLoading = true
+        state.folderUploadError = null
+        state.folderConversionData = null
+      })
+      .addCase(convertFolderToJson.fulfilled, (state, action) => {
+        state.folderUploadLoading = false
+        state.folderConversionData = action.payload.data
+        state.folderUploadError = null
+      })
+      .addCase(convertFolderToJson.rejected, (state, action) => {
+        state.folderUploadLoading = false
+        state.folderUploadError = action.payload?.message || 'Failed to convert folder'
+        state.folderConversionData = null
+      })
+
+      // Upload folder directly
+      .addCase(uploadFolder.pending, (state) => {
+        state.folderUploadLoading = true
+        state.folderUploadError = null
+      })
+      .addCase(uploadFolder.fulfilled, (state, action) => {
+        state.folderUploadLoading = false
+        state.pushStatus = action.payload
+        state.folderUploadError = null
+      })
+      .addCase(uploadFolder.rejected, (state, action) => {
+        state.folderUploadLoading = false
+        state.folderUploadError = action.payload?.message || 'Failed to upload folder'
       })
 
       // Delete version
@@ -393,7 +466,8 @@ const versionsSlice = createSlice({
 
 export const { 
   clearError, 
-  clearPushStatus, 
+  clearPushStatus,
+  clearFolderConversionData,
   updateDownloadProgress, 
   clearDownloadRequest 
 } = versionsSlice.actions

@@ -539,12 +539,12 @@ export default function AIDAWProjectDetail({ params }) {
           )}
         </div>
 
-        <div className="p-3 border-t border-white/10 flex-shrink-0 bg-white/[0.02]">
+        <div className="p-3 fixed right-0 top-3 flex-shrink-0 ">
           <button
             onClick={() => setShowUploadVersion(true)}
             className="w-full px-4 py-2.5 bg-white/10 hover:bg-white/15 rounded-lg text-sm transition-all flex items-center justify-center gap-2 border border-white/20"
           >
-            <FiUpload /> Upload Version
+            <FiUpload /> 
           </button>
         </div>
       </aside>
@@ -621,15 +621,15 @@ export default function AIDAWProjectDetail({ params }) {
           </div>
 
           {/* AI Input */}
-          <div className="p-4 border-t border-white/10 flex-shrink-0 bg-white/[0.02]">
-            <div className="flex gap-2 bg-white/5 backdrop-blur-xl rounded-xl p-3 border border-white/20 max-w-4xl mx-auto">
+          <div className="p-4 fixed bottom-0 z-2 w-full flex-shrink-0 ">
+            <div className="flex gap-2 bg-white/5 backdrop-blur-xl rounded-xl p-2 border border-white/20 max-w-3xl ml-[110px] ">
               <input
                 type="text"
                 value={aiInput}
                 onChange={(e) => setAiInput(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && handleSendAiMessage()}
                 placeholder="Ask about versions, samples, files, or team..."
-                className="flex-1 bg-transparent border-none outline-none text-white placeholder-white/40 px-2"
+                className="flex-1 bg-transparent outline-0 focus:outline-0 border-none outline-none text-white placeholder-white/40 px-2"
               />
               <button
                 onClick={handleSendAiMessage}
